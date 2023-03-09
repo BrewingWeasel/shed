@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::{fs::read_to_string, io::Read};
 
+
 /// Clone of sed
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -14,6 +15,9 @@ struct Args {
     /// Edit in place
     #[arg(short = 'i', long, default_value_t = false)]
     edit_in_place: bool,
+
+    #[arg(short = 'p', long, default_value_t = false)]
+    pretty_print: bool,
 }
 
 fn main() {
@@ -23,7 +27,7 @@ fn main() {
 }
 
 fn run(cli: Args) {
-    let text = match cli.file {
+    let text = match &cli.file {
         Some(file) => read_to_string(file).unwrap(),
         None => {
             let mut stdin = String::new();
@@ -31,5 +35,10 @@ fn run(cli: Args) {
             stdin
         }
     };
-    shed::parse(cli.pattern, text, cli.edit_in_place);
+    let modified = shed::parse(cli.pattern, text);
+    if cli.edit_in_place {
+        std::fs::write(cli.file.unwrap(), modified).expect("File was unable to be written to");
+    } else {
+        print!("{}", modified);
+    }
 }

@@ -1,8 +1,4 @@
-enum Selection {
-    Line(usize),
-    Range(usize, usize),
-    Matching(String),
-}
+use regex::Regex;
 
 use std::{
     str::{Chars, Split},
@@ -12,25 +8,32 @@ use std::{
 // TODO: IDEAS FOR STUFF: + to add ranges, more commands, -p/pretty option, negative numbers (check if
 // exists already)
 
+enum Selection {
+    Line(usize),
+    Range(usize, usize),
+    Matching(Regex),
+}
+
 impl Selection {
     fn in_selection(&self, num: &usize, conts: &str) -> bool {
         match self {
             Self::Line(line_num) => num == line_num,
             Self::Range(start, end) => num >= start && num <= end,
-            Self::Matching(matching) => conts.contains(matching),
+            Self::Matching(matching) => matching.is_match(conts),
         }
     }
 }
 
-pub fn parse(expression: String, conts: String, edit_in_place: bool) -> String {
+pub fn parse(expression: String, conts: String) -> String {
     let mut chars = expression.chars();
     let (selection, mode) = handle_ranges(&mut chars, &conts);
     let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
     split_up_conts.next();
 
     if let Selection::Matching(v) = &selection {
-        if v != "" {
-            split_up_conts.nth(1); // Hacky work around, should check for splitting char
+        if !v.is_match("") {
+            split_up_conts.nth(1); // EXTREMELY Hacky work around, should check for splitting
+                                   // char, should use different method to check for empty regex
         }
     }
 
@@ -39,17 +42,11 @@ pub fn parse(expression: String, conts: String, edit_in_place: bool) -> String {
         'd' => delete(conts, selection),
         e => panic!("invalid input, {}, {:?}", e, chars.next()),
     };
-
-    if edit_in_place {
-        std::fs::write("testing", &changed).expect("File was unable to be written to");
-    } else {
-        print!("{}", &changed);
-    }
     changed
 }
 
 fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> String {
-    let initial = args.next().unwrap();
+    let initial = Regex::new(args.next().unwrap()).unwrap();
     let replace = args.next().unwrap();
     let global = match args.next() {
         Some("g") => true,
@@ -59,7 +56,7 @@ fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> St
     if global {
         conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
             if range.in_selection(&n, l) {
-                i + &l.replace(initial, replace) + "\n"
+                i + &initial.replace_all(&l, replace).to_string() + "\n"
             } else {
                 i + l + "\n"
             }
@@ -67,7 +64,7 @@ fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> St
     } else {
         conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
             if range.in_selection(&n, l) {
-                i + &l.replacen(initial, replace, 1) + "\n"
+                i + &initial.replace(&l, replace).to_string() + "\n"
             } else {
                 i + l + "\n"
             }
@@ -94,7 +91,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &String) -> (Selection, char) {
             if let Ok(num) = numbers[0].parse::<usize>() {
                 Selection::Line(num - 1)
             } else {
-                Selection::Matching(numbers[0].clone()) // TODO: do something better than a clone
+                Selection::Matching(Regex::new(&numbers[0]).unwrap())
             }
         }
         2 => Selection::Range(
