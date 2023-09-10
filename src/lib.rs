@@ -90,13 +90,15 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
     // TODO: make this a struct
     let mut cur_numbers: Vec<String> = vec!["".to_string()];
     let mut can_add_chars = false;
+    let mut is_matching_pattern = false;
 
-    let handle_numbers = |numbers: Vec<String>| match numbers.len() {
+    let handle_numbers = |numbers: Vec<String>, matching_pattern: bool| match numbers.len() {
         1 => {
-            if let Ok(num) = numbers[0].parse::<usize>() {
-                Selection::Line(num - 1)
-            } else {
+            if matching_pattern {
                 Selection::Matching(Regex::new(&numbers[0]).unwrap())
+            } else {
+                let num = numbers[0].parse::<usize>().unwrap();
+                Selection::Line(num - 1)
             }
         }
         2 => Selection::Range(
@@ -110,15 +112,16 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
 
     loop {
         match input.next() {
-            Some(',') => cur_numbers.push("".to_string()),
+            Some(',') => cur_numbers.push(String::new()),
             Some(c) if c == 's' || c == 'd' => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {
-                    return (handle_numbers(cur_numbers), c);
+                    return (handle_numbers(cur_numbers, is_matching_pattern), c);
                 }
             }
             Some('/') => {
+                is_matching_pattern = true;
                 can_add_chars = !can_add_chars;
             }
             Some('$') => cur_numbers
