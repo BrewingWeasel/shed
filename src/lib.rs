@@ -114,7 +114,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
             if matches!(selec_type, SelectionType::Step) {
                 Selection::Step(first, second)
             } else {
-                Selection::Range(first.saturating_sub(1), second)
+                Selection::Range(first.saturating_sub(1), second.saturating_sub(1))
             }
         }
         _ => {
