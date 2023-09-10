@@ -12,6 +12,7 @@ use std::{
 enum Selection {
     Line(usize),
     Range(usize, usize),
+    Step(usize, usize),
     Matching(Regex),
 }
 
@@ -20,6 +21,7 @@ impl Selection {
         match self {
             Self::Line(line_num) => num == line_num,
             Self::Range(start, end) => num >= start && num <= end,
+            Self::Step(start, step) => (num.saturating_sub(*start) + 1) % step == 0,
             Self::Matching(matching) => matching.is_match(conts),
         }
     }
@@ -87,24 +89,34 @@ fn delete(conts: String, range: Selection) -> String {
 }
 
 fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
-    // TODO: make this a struct
+    enum SelectionType {
+        MatchingPattern,
+        Step,
+        Default,
+    }
+
     let mut cur_numbers: Vec<String> = vec!["".to_string()];
     let mut can_add_chars = false;
-    let mut is_matching_pattern = false;
+    let mut selection_type = SelectionType::Default;
 
-    let handle_numbers = |numbers: Vec<String>, matching_pattern: bool| match numbers.len() {
+    let handle_numbers = |numbers: Vec<String>, selec_type: SelectionType| match numbers.len() {
         1 => {
-            if matching_pattern {
+            if matches!(selec_type, SelectionType::MatchingPattern) {
                 Selection::Matching(Regex::new(&numbers[0]).unwrap())
             } else {
                 let num = numbers[0].parse::<usize>().unwrap();
                 Selection::Line(num - 1)
             }
         }
-        2 => Selection::Range(
-            numbers[0].parse::<usize>().unwrap() - 1,
-            numbers[1].parse::<usize>().unwrap(),
-        ),
+        2 => {
+            let first = numbers[0].parse::<usize>().unwrap();
+            let second = numbers[1].parse::<usize>().unwrap();
+            if matches!(selec_type, SelectionType::Step) {
+                Selection::Step(first, second)
+            } else {
+                Selection::Range(first.saturating_sub(1), second)
+            }
+        }
         _ => {
             panic!("Invalid number of inputs");
         }
@@ -113,15 +125,19 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
     loop {
         match input.next() {
             Some(',') => cur_numbers.push(String::new()),
+            Some('~') => {
+                selection_type = SelectionType::Step;
+                cur_numbers.push(String::new());
+            }
             Some(c) if c == 's' || c == 'd' => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {
-                    return (handle_numbers(cur_numbers, is_matching_pattern), c);
+                    return (handle_numbers(cur_numbers, selection_type), c);
                 }
             }
             Some('/') => {
-                is_matching_pattern = true;
+                selection_type = SelectionType::MatchingPattern;
                 can_add_chars = !can_add_chars;
             }
             Some('$') => cur_numbers
