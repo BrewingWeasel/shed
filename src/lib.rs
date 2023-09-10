@@ -19,6 +19,7 @@ enum Selection {
     Range(usize, usize),
     Step(usize, usize),
     Matching(Regex),
+    Any,
 }
 
 impl Selection {
@@ -28,6 +29,7 @@ impl Selection {
             Self::Range(start, end) => num >= start && num <= end,
             Self::Step(start, step) => (num.saturating_sub(*start) + 1) % step == 0,
             Self::Matching(matching) => matching.is_match(conts),
+            Self::Any => true,
         }
     }
 }
@@ -124,9 +126,10 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
         1 => {
             if matches!(selec_type, SelectionType::MatchingPattern) {
                 Selection::Matching(Regex::new(&numbers[0]).unwrap())
-            } else {
-                let num = numbers[0].parse::<usize>().unwrap();
+            } else if let Ok(num) = numbers[0].parse::<usize>() {
                 Selection::Line(num - 1)
+            } else {
+                Selection::Any
             }
         }
         2 => {

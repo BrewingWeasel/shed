@@ -1,116 +1,101 @@
+use shed::{parse, Config};
 
+macro_rules! run_test {
+    ($original:expr, $expression:expr, $output:expr) => {
+        assert_eq!(
+            String::from($output),
+            parse(
+                String::from($expression),
+                Config { quiet: false },
+                String::from($original),
+            )
+        )
+    };
+}
 
 #[test]
 fn simple_one_line_substitution() {
-    assert_eq!(
-        "Labas everyone!\n".to_string(),
-        shed::parse("s/Hello/Labas/".to_string(), "Hello everyone!".to_string(),)
-    )
+    run_test!("Hello everyone!", "s/Hello/Labas/", "Labas everyone!\n");
 }
 
 #[test]
 fn simple_one_line_substitution_no_global() {
-    assert_eq!(
-        "Labas everyone! Hello!\n".to_string(),
-        shed::parse(
-            "s/Hello/Labas/".to_string(),
-            "Hello everyone! Hello!".to_string(),
-        )
+    run_test!(
+        "Hello everyone! Hello!",
+        "s/Hello/Labas/",
+        "Labas everyone! Hello!\n"
     )
 }
 
 #[test]
 fn simple_one_line_substitution_global() {
-    assert_eq!(
-        "Labas everyone! Labas!\n".to_string(),
-        shed::parse(
-            "s/Hello/Labas/g".to_string(),
-            "Hello everyone! Hello!".to_string(),
-        )
+    run_test!(
+        "Hello everyone! Hello!",
+        "s/Hello/Labas/g",
+        "Labas everyone! Labas!\n"
     )
 }
 
 #[test]
 fn simple_one_line_substitution_deletion() {
-    assert_eq!(
-        " everyone!\n".to_string(),
-        shed::parse("s/Hello//".to_string(), "Hello everyone!".to_string(),)
-    )
+    run_test!("Hello everyone!", "s/Hello//", " everyone!\n")
 }
 
 #[test]
 fn first_line_selection() {
-    assert_eq!(
-        "Labas everyone!\nHello world!\n".to_string(),
-        shed::parse(
-            "1s/Hello/Labas/".to_string(),
-            "Hello everyone!\nHello world!".to_string(),
-        )
+    run_test!(
+        "Hello everyone!\nHello world!",
+        "1s/Hello/Labas/",
+        "Labas everyone!\nHello world!\n"
     )
 }
 
 #[test]
 fn matching_line_selection() {
-    assert_eq!(
-        "Hello everyone!\nLabas world!\n".to_string(),
-        shed::parse(
-            "/world/s/Hello/Labas/".to_string(),
-            "Hello everyone!\nHello world!".to_string(),
-        )
-    )
+    run_test!(
+        "Hello everyone!\nHello world!",
+        "/world/s/Hello/Labas/",
+        "Hello everyone!\nLabas world!\n"
+    );
 }
 
 #[test]
 fn matching_line_selection_multiple_matches() {
-    assert_eq!(
-        "Hello everyone!\nLabas world!\nLabas, are you the world?\n".to_string(),
-        shed::parse(
-            "/world/s/Hello/Labas/".to_string(),
-            "Hello everyone!\nHello world!\nHello, are you the world?".to_string(),
-        )
+    run_test!(
+        "Hello everyone!\nHello world!\nHello, are you the world?",
+        "/world/s/Hello/Labas/",
+        "Hello everyone!\nLabas world!\nLabas, are you the world?\n"
     )
 }
 
 #[test]
 fn matching_line_selection_multiple_matches_changeless() {
-    assert_eq!(
-        "Hello everyone!\nHello world!\nHello, are you the world?\n".to_string(),
-        shed::parse(
-            "/world/s/Labas/Hello/".to_string(),
-            "Hello everyone!\nHello world!\nHello, are you the world?".to_string(),
-        )
+    run_test!(
+        "Hello everyone!\nHello world!\nHello, are you the world?",
+        "/world/s/Labas/Hello/",
+        "Hello everyone!\nHello world!\nHello, are you the world?\n"
     )
 }
 
 #[test]
 fn matching_line_selection_multiple_matches_some_changed() {
-    assert_eq!(
-        "Hello everyone!\nLabas world!\nHow are you, world?\n".to_string(),
-        shed::parse(
-            "/world/s/Hello/Labas/".to_string(),
-            "Hello everyone!\nHello world!\nHow are you, world?".to_string(),
-        )
+    run_test!(
+        "Hello everyone!\nHello world!\nHow are you, world?",
+        "/world/s/Hello/Labas/",
+        "Hello everyone!\nLabas world!\nHow are you, world?\n"
     )
 }
 
 #[test]
 fn regex_inital_global() {
-    assert_eq!(
-        "Labas! Labas! হ্যালো!\n".to_string(),
-        shed::parse(
-            "s/H.llo/Labas/g".to_string(),
-            "Hello! Hallo! হ্যালো!".to_string(),
-        )
-    )
+    run_test!("Hello! Hallo!", "s/H.llo/Labas/g", "Labas! Labas!\n")
 }
 
 #[test]
 fn regex_inital_multiline() {
-    assert_eq!(
-        "สวัสดี, Kaip sekasi?\nสวัสดี, How are you?\nياخشىمۇسىز؟\n".to_string(),
-        shed::parse(
-            "s/^.{5}!/สวัสดี,/g".to_string(),
-            "Labas! Kaip sekasi?\nHello! How are you?\nياخشىمۇسىز؟".to_string(),
-        )
+    run_test!(
+        "Labas! Kaip sekasi?\nHello! How are you?\nياخشىمۇسىز؟",
+        "s/^.{5}!/สวัสดี,/g",
+        "สวัสดี, Kaip sekasi?\nสวัสดี, How are you?\nياخشىمۇسىز؟\n"
     )
 }
