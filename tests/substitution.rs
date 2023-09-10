@@ -1,4 +1,4 @@
-use shed;
+
 
 #[test]
 fn simple_one_line_substitution() {

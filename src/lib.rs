@@ -37,26 +37,21 @@ pub fn parse(expression: String, conts: String) -> String {
         }
     }
 
-    let changed = match mode {
+    match mode {
         's' => substitute(&mut split_up_conts, conts, selection),
         'd' => delete(conts, selection),
         e => panic!("invalid input, {}, {:?}", e, chars.next()),
-    };
-    changed
+    }
 }
 
 fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> String {
     let initial = Regex::new(args.next().unwrap()).unwrap();
     let replace = args.next().unwrap();
-    let global = match args.next() {
-        Some("g") => true,
-        _ => false,
-    };
 
-    if global {
+    if args.next() == Some("g") {
         conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
             if range.in_selection(&n, l) {
-                i + &initial.replace_all(&l, replace).to_string() + "\n"
+                i + initial.replace_all(l, replace).as_ref() + "\n"
             } else {
                 i + l + "\n"
             }
@@ -64,7 +59,7 @@ fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> St
     } else {
         conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
             if range.in_selection(&n, l) {
-                i + &initial.replace(&l, replace).to_string() + "\n"
+                i + initial.replace(l, replace).as_ref() + "\n"
             } else {
                 i + l + "\n"
             }
@@ -81,7 +76,7 @@ fn delete(conts: String, range: Selection) -> String {
         .collect::<String>()
 }
 
-fn handle_ranges(input: &mut Chars<'_>, conts: &String) -> (Selection, char) {
+fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
     // TODO: make this a struct
     let mut cur_numbers: Vec<String> = vec!["".to_string()];
     let mut can_add_chars = false;
