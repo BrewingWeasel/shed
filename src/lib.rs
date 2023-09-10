@@ -83,8 +83,7 @@ fn delete(conts: String, range: Selection) -> String {
         .lines()
         .enumerate()
         .filter(|(l, n)| !range.in_selection(l, n))
-        .map(|(_, v)| v)
-        .collect::<String>()
+        .fold(String::new(), |s, (_, v)| s + v + "\n")
 }
 
 fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
