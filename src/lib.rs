@@ -112,18 +112,11 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
     loop {
         match input.next() {
             Some(',') => cur_numbers.push("".to_string()),
-            Some('s') => {
+            Some(c) if c == 's' || c == 'd' => {
                 if can_add_chars {
-                    cur_numbers.last_mut().unwrap().push('s');
+                    cur_numbers.last_mut().unwrap().push(c);
                 } else {
-                    return (handle_numbers(cur_numbers), 's');
-                }
-            } // TODO: CLEAN UP BAD CODE
-            Some('d') => {
-                if can_add_chars {
-                    cur_numbers.last_mut().unwrap().push('d');
-                } else {
-                    return (handle_numbers(cur_numbers), 'd');
+                    return (handle_numbers(cur_numbers), c);
                 }
             }
             Some('/') => {
