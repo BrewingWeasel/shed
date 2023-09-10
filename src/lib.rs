@@ -8,6 +8,11 @@ use std::{
 
 // TODO: IDEAS FOR STUFF: + to add ranges, more commands, -p/pretty option, negative numbers (check if
 // exists already)
+//
+
+pub struct Config {
+    pub quiet: bool, // TODO: quiet should work for everything; add multiple streams
+}
 
 enum Selection {
     Line(usize),
@@ -27,7 +32,7 @@ impl Selection {
     }
 }
 
-pub fn parse(expression: String, conts: String) -> String {
+pub fn parse(expression: String, config: Config, conts: String) -> String {
     let mut chars = expression.chars();
     let (selection, mode) = handle_ranges(&mut chars, &conts);
     let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
@@ -43,6 +48,7 @@ pub fn parse(expression: String, conts: String) -> String {
     match mode {
         's' => substitute(&mut split_up_conts, conts, selection),
         'd' => delete(conts, selection),
+        'p' => shed_print(conts, selection, config),
         e => panic!("invalid input, {}, {:?}", e, chars.next()),
     }
 }
@@ -88,6 +94,21 @@ fn delete(conts: String, range: Selection) -> String {
         .fold(String::new(), |s, (_, v)| s + v + "\n")
 }
 
+fn shed_print(conts: String, range: Selection, config: Config) -> String {
+    conts.lines().enumerate().fold(String::new(), |s, (l, n)| {
+        let mut new_val = s;
+        if range.in_selection(&l, n) {
+            new_val.push_str(n);
+            new_val.push('\n');
+        }
+        if config.quiet {
+            new_val
+        } else {
+            new_val + n + "\n"
+        }
+    })
+}
+
 fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
     enum SelectionType {
         MatchingPattern,
@@ -129,7 +150,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
                 selection_type = SelectionType::Step;
                 cur_numbers.push(String::new());
             }
-            Some(c) if c == 's' || c == 'd' => {
+            Some(c) if c == 's' || c == 'd' || c == 'p' => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {

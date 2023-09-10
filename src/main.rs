@@ -1,6 +1,6 @@
 use clap::Parser;
+use shed::Config;
 use std::{fs::read_to_string, io::Read};
-
 
 /// Clone of sed
 #[derive(Parser, Debug)]
@@ -15,6 +15,10 @@ struct Args {
     /// Edit in place
     #[arg(short = 'i', long, default_value_t = false)]
     edit_in_place: bool,
+
+    /// Print lines by default
+    #[arg(short = 'n', long, default_value_t = false)]
+    quiet: bool,
 
     #[arg(short = 'p', long, default_value_t = false)]
     pretty_print: bool,
@@ -35,7 +39,7 @@ fn run(cli: Args) {
             stdin
         }
     };
-    let modified = shed::parse(cli.pattern, text);
+    let modified = shed::parse(cli.pattern, Config { quiet: cli.quiet }, text);
     if cli.edit_in_place {
         std::fs::write(cli.file.unwrap(), modified).expect("File was unable to be written to");
     } else {
