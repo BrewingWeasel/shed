@@ -1,6 +1,7 @@
-use regex::Regex;
+use regex::{Regex, Replacer};
 
 use std::{
+    borrow::Cow,
     str::{Chars, Split},
     usize,
 };
@@ -48,23 +49,33 @@ fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> St
     let initial = Regex::new(args.next().unwrap()).unwrap();
     let replace = args.next().unwrap();
 
-    if args.next() == Some("g") {
-        conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
-            if range.in_selection(&n, l) {
-                i + initial.replace_all(l, replace).as_ref() + "\n"
-            } else {
-                i + l + "\n"
-            }
-        }) // TODO: nekartok
+    let replacement_func = if args.next() == Some("g") {
+        Regex::replace_all
     } else {
-        conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
-            if range.in_selection(&n, l) {
-                i + initial.replace(l, replace).as_ref() + "\n"
-            } else {
-                i + l + "\n"
-            }
-        })
-    }
+        Regex::replace
+    };
+
+    run_replacement(initial, replacement_func, replace, conts, range)
+}
+
+fn run_replacement<F, R>(
+    initial: Regex,
+    operation: F,
+    replace: R,
+    conts: String,
+    range: Selection,
+) -> String
+where
+    F: for<'h> Fn(&Regex, &'h str, R) -> Cow<'h, str>,
+    R: Replacer + Copy,
+{
+    conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
+        if range.in_selection(&n, l) {
+            i + operation(&initial, l, replace).as_ref() + "\n"
+        } else {
+            i + l + "\n"
+        }
+    })
 }
 
 fn delete(conts: String, range: Selection) -> String {
