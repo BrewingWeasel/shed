@@ -4,7 +4,7 @@ macro_rules! run_test {
         assert_eq!(
             String::from($output),
             parse(
-                String::from($expression),
+                $expression,
                 Config { quiet: false },
                 String::from($original),
             )

@@ -23,10 +23,10 @@ enum Selection {
 }
 
 impl Selection {
-    fn in_selection(&self, num: &usize, conts: &str) -> bool {
+    fn in_selection(&self, num: usize, conts: &str) -> bool {
         match self {
-            Self::Line(line_num) => num == line_num,
-            Self::Range(start, end) => num >= start && num <= end,
+            Self::Line(line_num) => num == *line_num,
+            Self::Range(start, end) => num >= *start && num <= *end,
             Self::Step(start, step) => (num.saturating_sub(*start) + 1) % step == 0,
             Self::Matching(matching) => matching.is_match(conts),
             Self::Any => true,
@@ -34,7 +34,7 @@ impl Selection {
     }
 }
 
-pub fn parse(expression: String, config: Config, conts: String) -> String {
+pub fn parse(expression: &str, config: Config, conts: String) -> String {
     let mut chars = expression.chars();
     let (selection, mode) = handle_ranges(&mut chars, &conts);
     let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
@@ -79,8 +79,8 @@ where
     F: for<'h> Fn(&Regex, &'h str, R) -> Cow<'h, str>,
     R: Replacer + Copy,
 {
-    conts.lines().enumerate().fold("".to_string(), |i, (n, l)| {
-        if range.in_selection(&n, l) {
+    conts.lines().enumerate().fold(String::new(), |i, (n, l)| {
+        if range.in_selection(n, l) {
             i + operation(&initial, l, replace).as_ref() + "\n"
         } else {
             i + l + "\n"
@@ -92,14 +92,14 @@ fn delete(conts: String, range: Selection) -> String {
     conts
         .lines()
         .enumerate()
-        .filter(|(l, n)| !range.in_selection(l, n))
+        .filter(|(l, n)| !range.in_selection(*l, n))
         .fold(String::new(), |s, (_, v)| s + v + "\n")
 }
 
 fn shed_print(conts: String, range: Selection, config: Config) -> String {
     conts.lines().enumerate().fold(String::new(), |s, (l, n)| {
         let mut new_val = s;
-        if range.in_selection(&l, n) {
+        if range.in_selection(l, n) {
             new_val.push_str(n);
             new_val.push('\n');
         }
@@ -118,7 +118,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
         Default,
     }
 
-    let mut cur_numbers: Vec<String> = vec!["".to_string()];
+    let mut cur_numbers: Vec<String> = vec![String::new()];
     let mut can_add_chars = false;
     let mut selection_type = SelectionType::Default;
 
@@ -167,7 +167,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
             Some('$') => cur_numbers
                 .last_mut()
                 .unwrap()
-                .push_str(&(conts.split('\n').collect::<Vec<&str>>().len() - 1).to_string()),
+                .push_str(&(conts.split('\n').count() - 1).to_string()),
             Some(n) => cur_numbers.last_mut().unwrap().push(n),
             None => panic!("eeh"),
         }

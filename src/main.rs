@@ -31,18 +31,18 @@ fn main() {
 }
 
 fn run(cli: Args) {
-    let text = match &cli.file {
-        Some(file) => read_to_string(file).unwrap(),
-        None => {
+    let text = cli.file.as_ref().map_or_else(
+        || {
             let mut stdin = String::new();
             std::io::stdin().read_to_string(&mut stdin).unwrap(); // Rewrite all of this
             stdin
-        }
-    };
-    let modified = shed::parse(cli.pattern, Config { quiet: cli.quiet }, text);
+        },
+        |file| read_to_string(file).unwrap(),
+    );
+    let modified = shed::parse(&cli.pattern, Config { quiet: cli.quiet }, text);
     if cli.edit_in_place {
         std::fs::write(cli.file.unwrap(), modified).expect("File was unable to be written to");
     } else {
-        print!("{}", modified);
+        print!("{modified}");
     }
 }
