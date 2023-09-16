@@ -3,7 +3,6 @@ use regex::Regex;
 use std::{
     borrow::Cow,
     str::{Chars, Split},
-    usize,
 };
 
 // TODO: IDEAS FOR STUFF: + to add ranges, more commands, -p/pretty option, negative numbers (check if
@@ -87,35 +86,41 @@ impl ShedOperation for ShedPrint {
     }
 }
 
-pub fn parse(expression: &str, config: Config, conts: String) -> String {
-    let mut chars = expression.chars();
-    let (selection, mode) = handle_ranges(&mut chars, &conts);
-    let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
-    split_up_conts.next();
-
-    // HACK: also I have no clue what this does anymore
-    if let Selection::Matching(v) = &selection {
-        if !v.is_match("") {
-            split_up_conts.nth(1); // EXTREMELY Hacky work around, should check for splitting
-                                   // char, should use different method to check for empty regex
-        }
-    }
-
+pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String {
     let mut final_string = String::new();
+    let mut operations: Vec<(Box<dyn ShedOperation>, Selection)> = Vec::new();
+    for expression in expressions.iter() {
+        let mut chars = expression.chars();
+        let (selection, mode) = handle_ranges(&mut chars, &conts);
+        let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
+        split_up_conts.next();
 
-    let operations: Box<dyn ShedOperation> = match mode {
-        's' => Box::new(Substitute::generate(split_up_conts)),
-        'd' => Box::new(Delete {}),
-        'p' => Box::new(ShedPrint {}),
-        _ => panic!("invalid operation"),
-    };
+        // HACK:     not sure how this works or why it's necessary anymore, but without it
+        // everything breaks
+        if let Selection::Matching(v) = &selection {
+            if !v.is_match("") {
+                split_up_conts.nth(1); // EXTREMELY Hacky work around, should check for splitting
+                                       // char, should use different method to check for empty regex
+            }
+        }
+
+        let operation: Box<dyn ShedOperation> = match mode {
+            's' => Box::new(Substitute::generate(split_up_conts.clone())),
+            'd' => Box::new(Delete {}),
+            'p' => Box::new(ShedPrint {}),
+            _ => panic!("invalid operation"),
+        };
+        operations.push((operation, selection))
+    }
 
     for (num, line) in conts.lines().enumerate() {
         let mut print_final = true;
-        if selection.in_selection(num, line) {
-            let should_print = operations.run(line, &mut final_string);
-            if print_final {
-                print_final = should_print;
+        for (operation, selection) in &operations {
+            if selection.in_selection(num, line) {
+                let should_print = operation.run(line, &mut final_string);
+                if print_final {
+                    print_final = should_print;
+                }
             }
         }
         if !config.quiet && print_final {

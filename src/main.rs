@@ -22,6 +22,9 @@ struct Args {
 
     #[arg(short = 'p', long, default_value_t = false)]
     pretty_print: bool,
+
+    #[arg(short = 'e', long)]
+    expression: Vec<String>,
 }
 
 fn main() {
@@ -30,7 +33,7 @@ fn main() {
     run(cli);
 }
 
-fn run(cli: Args) {
+fn run(mut cli: Args) {
     let text = cli.file.as_ref().map_or_else(
         || {
             let mut stdin = String::new();
@@ -39,7 +42,8 @@ fn run(cli: Args) {
         },
         |file| read_to_string(file).unwrap(),
     );
-    let modified = shed::parse(&cli.pattern, Config { quiet: cli.quiet }, text);
+    cli.expression.push(cli.pattern);
+    let modified = shed::parse(cli.expression, Config { quiet: cli.quiet }, text);
     if cli.edit_in_place {
         std::fs::write(cli.file.unwrap(), modified).expect("File was unable to be written to");
     } else {
