@@ -1,7 +1,7 @@
 use regex::Regex;
 
 use std::{
-    borrow::Cow,
+    borrow::{self, Cow},
     str::{Chars, Split},
 };
 
@@ -34,7 +34,7 @@ impl Selection {
 }
 
 trait ShedOperation {
-    fn run(&self, conts: &str, cur_string: &mut String) -> bool;
+    fn run(&self, conts: &mut Cow<'_, str>, cur_string: &mut String) -> bool;
 }
 
 struct Substitute<'a> {
@@ -51,27 +51,25 @@ impl<'a> Substitute<'a> {
             global: split_up_conts.next() == Some("g"),
         }
     }
-    pub fn replacement(&self, conts: &'a str) -> Cow<'a, str> {
-        if self.global {
+}
+
+impl ShedOperation for Substitute<'_> {
+    fn run(&self, conts: &mut borrow::Cow<'_, str>, _cur_string: &mut String) -> bool {
+        let new = if self.global {
             Regex::replace_all(&self.regex, conts, self.replace)
         } else {
             Regex::replace(&self.regex, conts, self.replace)
         }
-    }
-}
-
-impl ShedOperation for Substitute<'_> {
-    fn run(&self, conts: &str, cur_string: &mut String) -> bool {
-        cur_string.push_str(self.replacement(conts).as_ref());
-        cur_string.push('\n');
-        false
+        .into_owned();
+        _ = std::mem::replace(conts, Cow::Owned(new));
+        true
     }
 }
 
 struct Delete {}
 
 impl ShedOperation for Delete {
-    fn run(&self, _conts: &str, _cur_string: &mut String) -> bool {
+    fn run(&self, _conts: &mut Cow<'_, str>, _cur_string: &mut String) -> bool {
         false
     }
 }
@@ -79,7 +77,7 @@ impl ShedOperation for Delete {
 struct ShedPrint {}
 
 impl ShedOperation for ShedPrint {
-    fn run(&self, conts: &str, cur_string: &mut String) -> bool {
+    fn run(&self, conts: &mut Cow<'_, str>, cur_string: &mut String) -> bool {
         cur_string.push_str(conts);
         cur_string.push('\n');
         true
@@ -114,17 +112,18 @@ pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String 
     }
 
     for (num, line) in conts.lines().enumerate() {
+        let mut line = Cow::from(line);
         let mut print_final = true;
         for (operation, selection) in &operations {
-            if selection.in_selection(num, line) {
-                let should_print = operation.run(line, &mut final_string);
+            if selection.in_selection(num, line.as_ref()) {
+                let should_print = operation.run(&mut line, &mut final_string);
                 if print_final {
                     print_final = should_print;
                 }
             }
         }
         if !config.quiet && print_final {
-            final_string.push_str(line);
+            final_string.push_str(line.as_ref());
             final_string.push('\n');
         }
     }
