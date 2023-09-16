@@ -1,4 +1,4 @@
-use regex::{Regex, Replacer};
+use regex::Regex;
 
 use std::{
     borrow::Cow,
@@ -34,12 +34,66 @@ impl Selection {
     }
 }
 
+trait ShedOperation {
+    fn run(&self, conts: &str, cur_string: &mut String) -> bool;
+}
+
+struct Substitute<'a> {
+    pub regex: Regex,
+    pub replace: &'a str,
+    pub global: bool,
+}
+
+impl<'a> Substitute<'a> {
+    pub fn generate(mut split_up_conts: Split<'a, char>) -> Self {
+        Substitute {
+            regex: Regex::new(split_up_conts.next().unwrap()).unwrap(),
+            replace: split_up_conts.next().unwrap(),
+            global: split_up_conts.next() == Some("g"),
+        }
+    }
+    pub fn replacement(&self, conts: &'a str) -> Cow<'a, str> {
+        if self.global {
+            Regex::replace_all(&self.regex, conts, self.replace)
+        } else {
+            Regex::replace(&self.regex, conts, self.replace)
+        }
+    }
+}
+
+impl ShedOperation for Substitute<'_> {
+    fn run(&self, conts: &str, cur_string: &mut String) -> bool {
+        cur_string.push_str(self.replacement(conts).as_ref());
+        cur_string.push('\n');
+        false
+    }
+}
+
+struct Delete {}
+
+impl ShedOperation for Delete {
+    fn run(&self, _conts: &str, _cur_string: &mut String) -> bool {
+        false
+    }
+}
+
+struct ShedPrint {}
+
+impl ShedOperation for ShedPrint {
+    fn run(&self, conts: &str, cur_string: &mut String) -> bool {
+        cur_string.push_str(conts);
+        cur_string.push('\n');
+        true
+    }
+}
+
 pub fn parse(expression: &str, config: Config, conts: String) -> String {
     let mut chars = expression.chars();
     let (selection, mode) = handle_ranges(&mut chars, &conts);
     let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
     split_up_conts.next();
 
+    // HACK: also I have no clue what this does anymore
     if let Selection::Matching(v) = &selection {
         if !v.is_match("") {
             split_up_conts.nth(1); // EXTREMELY Hacky work around, should check for splitting
@@ -47,68 +101,29 @@ pub fn parse(expression: &str, config: Config, conts: String) -> String {
         }
     }
 
-    match mode {
-        's' => substitute(&mut split_up_conts, conts, selection),
-        'd' => delete(conts, selection),
-        'p' => shed_print(conts, selection, config),
-        e => panic!("invalid input, {}, {:?}", e, chars.next()),
-    }
-}
+    let mut final_string = String::new();
 
-fn substitute(args: &mut Split<'_, char>, conts: String, range: Selection) -> String {
-    let initial = Regex::new(args.next().unwrap()).unwrap();
-    let replace = args.next().unwrap();
-
-    let replacement_func = if args.next() == Some("g") {
-        Regex::replace_all
-    } else {
-        Regex::replace
+    let operations: Box<dyn ShedOperation> = match mode {
+        's' => Box::new(Substitute::generate(split_up_conts)),
+        'd' => Box::new(Delete {}),
+        'p' => Box::new(ShedPrint {}),
+        _ => panic!("invalid operation"),
     };
 
-    run_replacement(initial, replacement_func, replace, conts, range)
-}
-
-fn run_replacement<F, R>(
-    initial: Regex,
-    operation: F,
-    replace: R,
-    conts: String,
-    range: Selection,
-) -> String
-where
-    F: for<'h> Fn(&Regex, &'h str, R) -> Cow<'h, str>,
-    R: Replacer + Copy,
-{
-    conts.lines().enumerate().fold(String::new(), |i, (n, l)| {
-        if range.in_selection(n, l) {
-            i + operation(&initial, l, replace).as_ref() + "\n"
-        } else {
-            i + l + "\n"
+    for (num, line) in conts.lines().enumerate() {
+        let mut print_final = true;
+        if selection.in_selection(num, line) {
+            let should_print = operations.run(line, &mut final_string);
+            if print_final {
+                print_final = should_print;
+            }
         }
-    })
-}
-
-fn delete(conts: String, range: Selection) -> String {
-    conts
-        .lines()
-        .enumerate()
-        .filter(|(l, n)| !range.in_selection(*l, n))
-        .fold(String::new(), |s, (_, v)| s + v + "\n")
-}
-
-fn shed_print(conts: String, range: Selection, config: Config) -> String {
-    conts.lines().enumerate().fold(String::new(), |s, (l, n)| {
-        let mut new_val = s;
-        if range.in_selection(l, n) {
-            new_val.push_str(n);
-            new_val.push('\n');
+        if !config.quiet && print_final {
+            final_string.push_str(line);
+            final_string.push('\n');
         }
-        if config.quiet {
-            new_val
-        } else {
-            new_val + n + "\n"
-        }
-    })
+    }
+    final_string
 }
 
 fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
