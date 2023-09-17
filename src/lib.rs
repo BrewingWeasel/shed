@@ -2,6 +2,7 @@ use regex::Regex;
 
 use std::{
     borrow::{self, Cow},
+    collections::HashMap,
     str::{Chars, Split},
 };
 
@@ -84,6 +85,39 @@ impl ShedOperation for ShedPrint {
     }
 }
 
+// TODO: maybe better name? just stolen from gnu docs
+struct Transliterate {
+    pub map: HashMap<char, char>,
+}
+
+impl Transliterate {
+    pub fn generate(mut split_up_conts: Split<'_, char>) -> Self {
+        Transliterate {
+            map: split_up_conts
+                .next()
+                .unwrap()
+                .chars()
+                .zip(split_up_conts.next().unwrap().chars())
+                .collect(),
+        }
+    }
+}
+
+impl ShedOperation for Transliterate {
+    fn run(&self, conts: &mut Cow<'_, str>, _cur_string: &mut String) -> bool {
+        _ = std::mem::replace(
+            conts,
+            Cow::Owned(
+                conts
+                    .chars()
+                    .map(|c| self.map.get(&c).copied().unwrap_or(c))
+                    .collect(),
+            ),
+        );
+        true
+    }
+}
+
 pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String {
     let mut final_string = String::new();
     let mut operations: Vec<(Box<dyn ShedOperation>, Selection)> = Vec::new();
@@ -103,9 +137,10 @@ pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String 
         }
 
         let operation: Box<dyn ShedOperation> = match mode {
-            's' => Box::new(Substitute::generate(split_up_conts.clone())),
+            's' => Box::new(Substitute::generate(split_up_conts)),
             'd' => Box::new(Delete {}),
             'p' => Box::new(ShedPrint {}),
+            'y' => Box::new(Transliterate::generate(split_up_conts)),
             _ => panic!("invalid operation"),
         };
         operations.push((operation, selection))
@@ -172,7 +207,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
                 selection_type = SelectionType::Step;
                 cur_numbers.push(String::new());
             }
-            Some(c) if c == 's' || c == 'd' || c == 'p' => {
+            Some(c) if c == 's' || c == 'd' || c == 'p' || c == 'y' => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {
