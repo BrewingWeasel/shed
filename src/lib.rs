@@ -3,7 +3,7 @@ use regex::Regex;
 use std::{
     borrow::{self, Cow},
     collections::HashMap,
-    str::{Chars, Split},
+    str::Chars,
 };
 
 // TODO: IDEAS FOR STUFF: + to add ranges, more commands, -p/pretty option, negative numbers (check if
@@ -38,28 +38,28 @@ trait ShedOperation {
     fn run(&self, conts: &mut Cow<'_, str>, cur_string: &mut String) -> bool;
 }
 
-struct Substitute<'a> {
+struct Substitute {
     pub regex: Regex,
-    pub replace: &'a str,
+    pub replace: String,
     pub global: bool,
 }
 
-impl<'a> Substitute<'a> {
-    pub fn generate(mut split_up_conts: Split<'a, char>) -> Self {
+impl Substitute {
+    pub fn generate(args: Vec<String>) -> Self {
         Substitute {
-            regex: Regex::new(split_up_conts.next().unwrap()).unwrap(),
-            replace: split_up_conts.next().unwrap(),
-            global: split_up_conts.next() == Some("g"),
+            regex: Regex::new(&args[0]).unwrap(),
+            replace: args[1].to_owned(),
+            global: args[2] == "g",
         }
     }
 }
 
-impl ShedOperation for Substitute<'_> {
+impl ShedOperation for Substitute {
     fn run(&self, conts: &mut borrow::Cow<'_, str>, _cur_string: &mut String) -> bool {
         let new = if self.global {
-            Regex::replace_all(&self.regex, conts, self.replace)
+            Regex::replace_all(&self.regex, conts, &self.replace)
         } else {
-            Regex::replace(&self.regex, conts, self.replace)
+            Regex::replace(&self.regex, conts, &self.replace)
         }
         .into_owned();
         _ = std::mem::replace(conts, Cow::Owned(new));
@@ -91,14 +91,9 @@ struct Transliterate {
 }
 
 impl Transliterate {
-    pub fn generate(mut split_up_conts: Split<'_, char>) -> Self {
-        Transliterate {
-            map: split_up_conts
-                .next()
-                .unwrap()
-                .chars()
-                .zip(split_up_conts.next().unwrap().chars())
-                .collect(),
+    pub fn generate(args: Vec<String>) -> Self {
+        Self {
+            map: args[0].chars().zip(args[1].chars()).collect(),
         }
     }
 }
@@ -118,31 +113,32 @@ impl ShedOperation for Transliterate {
     }
 }
 
+struct Change {
+    pub change: String,
+}
+
+impl Change {
+    pub fn generate(to_change: String) -> Self {
+        Change { change: to_change }
+    }
+}
+
+impl ShedOperation for Change {
+    fn run(&self, conts: &mut Cow<'_, str>, _cur_string: &mut String) -> bool {
+        _ = std::mem::replace(conts, Cow::Owned(self.change.to_owned())); // TODO: remove
+                                                                          // to_string call
+        true
+    }
+}
+
 pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String {
     let mut final_string = String::new();
     let mut operations: Vec<(Box<dyn ShedOperation>, Selection)> = Vec::new();
     for expression in expressions.iter() {
         let mut chars = expression.chars();
         let (selection, mode) = handle_ranges(&mut chars, &conts);
-        let mut split_up_conts = expression.split(chars.next().unwrap_or('/'));
-        split_up_conts.next();
+        let operation = get_operation(chars, mode);
 
-        // HACK:     not sure how this works or why it's necessary anymore, but without it
-        // everything breaks
-        if let Selection::Matching(v) = &selection {
-            if !v.is_match("") {
-                split_up_conts.nth(1); // EXTREMELY Hacky work around, should check for splitting
-                                       // char, should use different method to check for empty regex
-            }
-        }
-
-        let operation: Box<dyn ShedOperation> = match mode {
-            's' => Box::new(Substitute::generate(split_up_conts)),
-            'd' => Box::new(Delete {}),
-            'p' => Box::new(ShedPrint {}),
-            'y' => Box::new(Transliterate::generate(split_up_conts)),
-            _ => panic!("invalid operation"),
-        };
         operations.push((operation, selection))
     }
 
@@ -163,6 +159,37 @@ pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String 
         }
     }
     final_string
+}
+
+fn get_args(mut input: Chars) -> Vec<String> {
+    let seperator = input.next().unwrap_or('/');
+    input
+        .collect::<String>()
+        .split(seperator)
+        .map(|v| v.to_string())
+        .collect()
+}
+
+fn get_single_arg(mut input: Chars<'_>) -> String {
+    let input = input.by_ref().skip_while(|c| c.is_whitespace());
+    input.collect()
+}
+
+fn get_operation(input: Chars, operation: char) -> Box<dyn ShedOperation + '_> {
+    match operation {
+        's' => {
+            let args = get_args(input);
+            Box::new(Substitute::generate(args))
+        }
+        'y' => {
+            let args = get_args(input);
+            Box::new(Transliterate::generate(args))
+        }
+        'c' => Box::new(Change::generate(get_single_arg(input))),
+        'd' => Box::new(Delete {}),
+        'p' => Box::new(ShedPrint {}),
+        _ => unreachable!(),
+    }
 }
 
 fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
@@ -207,7 +234,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
                 selection_type = SelectionType::Step;
                 cur_numbers.push(String::new());
             }
-            Some(c) if c == 's' || c == 'd' || c == 'p' || c == 'y' => {
+            Some(c) if ['s', 'd', 'p', 'y', 'c'].contains(&c) => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {
