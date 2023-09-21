@@ -131,6 +131,24 @@ impl ShedOperation for Change {
     }
 }
 
+struct Insert {
+    pub to_insert: String,
+}
+
+impl Insert {
+    pub fn generate(to_insert: String) -> Self {
+        Self { to_insert }
+    }
+}
+
+impl ShedOperation for Insert {
+    fn run(&self, _conts: &mut Cow<'_, str>, cur_string: &mut String) -> bool {
+        cur_string.push_str(&self.to_insert);
+        cur_string.push('\n');
+        true
+    }
+}
+
 pub fn parse(expressions: Vec<String>, config: Config, conts: String) -> String {
     let mut final_string = String::new();
     let mut operations: Vec<(Box<dyn ShedOperation>, Selection)> = Vec::new();
@@ -186,6 +204,7 @@ fn get_operation(input: Chars, operation: char) -> Box<dyn ShedOperation + '_> {
             Box::new(Transliterate::generate(args))
         }
         'c' => Box::new(Change::generate(get_single_arg(input))),
+        'i' => Box::new(Insert::generate(get_single_arg(input))),
         'd' => Box::new(Delete {}),
         'p' => Box::new(ShedPrint {}),
         _ => unreachable!(),
@@ -234,7 +253,7 @@ fn handle_ranges(input: &mut Chars<'_>, conts: &str) -> (Selection, char) {
                 selection_type = SelectionType::Step;
                 cur_numbers.push(String::new());
             }
-            Some(c) if ['s', 'd', 'p', 'y', 'c'].contains(&c) => {
+            Some(c) if ['s', 'd', 'p', 'y', 'c', 'i'].contains(&c) => {
                 if can_add_chars {
                     cur_numbers.last_mut().unwrap().push(c);
                 } else {
