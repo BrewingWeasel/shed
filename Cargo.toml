@@ -12,3 +12,4 @@ lto = true # ~1.11x faster, and release compile time is still pretty fast
 [dependencies]
 clap = { version = "4.1.8", features = ["derive"] }
 regex = "1.7.1"
+rustc-hash = "1.1.0"

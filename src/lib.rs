@@ -1,8 +1,8 @@
 use regex::Regex;
 
+use rustc_hash::FxHashMap;
 use std::{
     borrow::{self, Cow},
-    collections::HashMap,
     str::Chars,
 };
 
@@ -87,7 +87,7 @@ impl ShedOperation for ShedPrint {
 
 // TODO: maybe better name? just stolen from gnu docs
 struct Transliterate {
-    pub map: HashMap<char, char>,
+    pub map: FxHashMap<char, char>,
 }
 
 impl Transliterate {
